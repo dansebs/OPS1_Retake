@@ -30,33 +30,43 @@ long int scan_dir()
         int fd = open(dp->d_name, O_RDONLY);
         if (fd < 0)
         {
-            // unreadable file, skip
+            // Report and skip inaccessible files
+            fprintf(stderr, "Cannot open '%s': %s\n", dp->d_name, strerror(errno));
             continue;
         }
 
         ssize_t bytes_read;
         long int filesize = 0;
 
-        // Try reading file
+        // Try reading file contents
         while ((bytes_read = read(fd, buf, BUF_SIZE)) > 0)
             filesize += bytes_read;
 
         if (bytes_read < 0)
         {
-            if (errno == EISDIR) {
-                // It's a directory — skip gracefully
-                close(fd);
-                continue;
-            } else {
-                // Other read errors should still terminate
-                ERR("read");
+            if (errno == EISDIR)
+            {
+                // It's a directory — print notice, skip it
+                fprintf(stderr, "Skipping directory '%s'\n", dp->d_name);
+            }
+            else if (errno == EACCES)
+            {
+                // Permission denied
+                fprintf(stderr, "Access denied reading '%s'\n", dp->d_name);
+            }
+            else
+            {
+                // Other read error
+                fprintf(stderr, "Error reading '%s': %s\n", dp->d_name, strerror(errno));
             }
         }
-
-        sum += filesize;
+        else
+        {
+            sum += filesize;
+        }
 
         if (close(fd) < 0)
-            ERR("close");
+            fprintf(stderr, "Error closing '%s': %s\n", dp->d_name, strerror(errno));
     }
 
     if (closedir(dirp) < 0)
@@ -71,18 +81,29 @@ int main(int argc, char **argv)
     if (getcwd(path, MAX_PATH) == NULL)
         ERR("getcwd");
 
+
+    FILE *fptr = fopen("sample.txt", "w"); 
+    if (fptr == NULL) 
+    { 
+        printf("Could not open file"); 
+        return 0; 
+    } 
     for (int i = 1; i < argc; i += 2)
     {
-        if (chdir(argv[i]))
-            ERR("chdir");
+        if (chdir(argv[i])){
+            fprintf(stderr, "Cannot enter directory '%s': %s\n", argv[i], strerror(errno));
+            continue;
+        }
+            
 
         long int minsize = atol(argv[i + 1]);
         if (scan_dir() > minsize)
-            printf("%s\n", argv[i]);
+            fprintf(fptr,"%s\n", argv[i]);
 
         if (chdir(path))
             ERR("chdir");
     }
+    fclose(fptr);
 
     return EXIT_SUCCESS;
 }
