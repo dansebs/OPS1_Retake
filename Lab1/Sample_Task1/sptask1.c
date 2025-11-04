@@ -3,12 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #define ERR(source) (perror(source), fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
 #define MAX_PATH 101
 
 
-void scan_dir()
+long int scan_dir()
 {
     DIR *dirp;
     struct dirent *dp;
@@ -27,16 +28,16 @@ void scan_dir()
                 ERR("lstat");
             
             sum += filestat.st_size;
-            printf("%s %ld\n",dp->d_name,filestat.st_size);
         }
         }
     } while (dp != NULL);
-    printf("%ld\n", sum);
+    
     if (errno != 0)
         ERR("readdir");
     if (closedir(dirp))
         ERR("closedir");
 
+    return sum;
 }
 
 int main(int argc, char **argv)
@@ -44,6 +45,17 @@ int main(int argc, char **argv)
     char path[MAX_PATH];
     if(getcwd(path, MAX_PATH) == NULL) ERR("getcwd");
 
-    scan_dir();
+    for (int i = 1; i < argc; i+=2)
+    {
+        if (chdir(argv[i]))
+        {
+            ERR("chdir");
+        }
+        
+        long int minsize = atoi(argv[i+1]);
+        if(scan_dir() > minsize) printf("%s\n",argv[i]);
+        if(chdir(path))
+            ERR("chdir");
+    }
     return EXIT_SUCCESS;
 }
