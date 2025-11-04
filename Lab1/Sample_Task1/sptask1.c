@@ -22,13 +22,12 @@ long int scan_dir()
         errno = 0;
         if ((dp = readdir(dirp)) != NULL)
         {
-            if ((dp = readdir(dirp)) != NULL)
-        {
+
             if (lstat(dp->d_name, &filestat))
                 ERR("lstat");
             
             sum += filestat.st_size;
-        }
+        
         }
     } while (dp != NULL);
     
