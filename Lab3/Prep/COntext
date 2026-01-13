@@ -1,0 +1,143 @@
+File 1: 1_thread_lifecycle.c
+Concept: Managing how threads start and stop.
+
+Part A: Joinable Threads (create_joinable_threads)
+How it works:
+
+Allocation: It allocates an array tids to store the ID of every thread. You must keep these IDs to wait for them later.
+
+Creation: The loop calls pthread_create. This asks the OS to start a new execution stream.
+
+The Wait: The second loop calls pthread_join. This blocks the Main Thread. It says "I will not move past line X until Thread Y has finished."
+
+How to fill the blanks:
+
+The Function: Replace (void* (*)(void*))sleep with your actual worker function name (e.g., dog_thread or compute_sqrt).
+
+The Argument: Replace (void*)1 with a pointer to your specific argument struct (e.g., &args[i]).
+
+Part B: Detached Threads (manage_dynamic_threads)
+How it works:
+
+The Counter: We use mgr.active_threads to track how many workers are currently alive. This acts as our scoreboard.
+
+The Lock (mutex): We lock before incrementing/decrementing because two threads finishing at the exact same nanosecond could corrupt the counter (Race Condition).
+
+Detaching: pthread_detach(t) tells the OS: "When this thread finishes, delete its resources immediately. Don't make a zombie waiting for a join."
+
+The Manual Wait: Since we can't use pthread_join, the Main Thread enters a while loop. It checks the scoreboard every 10ms. If active_threads > 0, it sleeps. If 0, it breaks.
+
+How to fill the blanks:
+
+The Worker: Inside worker_detached, replace usleep(100000) with your actual task logic (e.g., modifying an array).
+
+The Condition: You might need to add a "Stop" flag if you want to kill threads early (like we did with sigint_received in Task 2/3).
+
+File 2: 2_mutex_patterns.c
+Concept: Ensuring only one thread touches a specific piece of memory at a time.
+
+Pattern 1: Array of Mutexes
+How it works:
+
+Instead of one lock for the whole building (slow), we give every room (array cell) its own lock.
+
+malloc: We allocate memory for n mutex objects.
+
+init: We must initialize every single one in a loop. A mutex is just garbage memory until pthread_mutex_init sets it up.
+
+How to fill the blanks:
+
+Usage: In your main, call setup_mutex_array(n, &ctx.mx_track) after allocating your data array.
+
+Pattern 2: Atomic Swap (Deadlock Prevention)
+How it works:
+
+The Problem: Thread A holds Lock 5, wants Lock 10. Thread B holds Lock 10, wants Lock 5. Both wait forever.
+
+The Fix: We enforce a traffic rule: "Always grab the smaller ID first."
+
+first = min(a, b): We calculate which lock is "lower".
+
+By locking mutexes[first] then mutexes[second], it is mathematically impossible to create a cycle (deadlock).
+
+How to fill the blanks:
+
+The Logic: Replace the comment /* ... Perform Swap ... */ with your actual data manipulation (e.g., temp = arr[a]; arr[a] = arr[b]; arr[b] = temp;).
+
+File 3: 3_shared_context.c
+Concept: Getting data into threads without Global Variables.
+
+How it works:
+The Context (app_ctx): Think of this as "The Database." It holds the heavy data (arrays, large buffers) and the synchronization tools (mutexes). It sits in main's memory.
+
+The Arguments (thread_args): Think of this as "The ID Badge." Every thread gets its own small struct containing:
+
+A pointer back to "The Database" (ctx).
+
+Its personal info (id, seed, start_index).
+
+Pointer Magic: Since all threads receive ctx *, they all point to the exact same array in memory. Changes made by Thread 1 are instantly visible to Thread 2.
+
+How to fill the blanks:
+Custom Fields:
+
+If you are doing a Dog Race: Add int *track, int n_dogs to array_context_t.
+
+If you are doing File Processing: Add int file_descriptor to file_context_t.
+
+In Main: You must malloc the thread_args_t array so that args[0] and args[1] exist at different memory addresses.
+
+File 4: 4_concurrent_file_edit.c
+Concept: Writing to a file from multiple threads simultaneously without corrupting it.
+
+How it works (pwrite vs write):
+Standard write: Uses the file's internal "cursor".
+
+Thread A writes. Cursor moves. Thread B writes.
+
+Race Condition: Thread A reads cursor, Thread B reads cursor, both write to same spot.
+
+Positional pwrite: Ignores the cursor. It says "Write to byte #500 exactly."
+
+This is Thread-Safe provided threads write to different areas.
+
+Calculation: offset = id * size. Thread 0 takes bytes 0-63. Thread 1 takes bytes 64-127.
+
+How to fill the blanks:
+Data Generation: Replace snprintf with whatever data you need to save.
+
+Offset Logic: Adjust offset = id * 64 based on your data size. If writing integers, offset = id * sizeof(int).
+
+File Open: In run_file_edit_demo, ensure you open with O_WRONLY.
+
+File 5: 5_concurrent_file_access.c
+Concept: Reading a file in parallel (faster processing).
+
+How it works (pread):
+Chunking: We divide the file into blocks. Thread 0 gets Block 0, Thread 1 gets Block 1.
+
+pread: Reads from the calculated offset without moving the file pointer. This means Thread 1 doesn't mess up Thread 2's reading position.
+
+Return Value: bytes_read is crucial.
+
+> 0: Success.
+
+0: End of File (EOF).
+
+-1: Error.
+
+How to fill the blanks:
+Buffer Size: Change 128 to the size of the record you are reading (e.g., sizeof(struct student)).
+
+Processing: Inside the if (bytes_read > 0) block, add your logic. For example: "Search for a keyword in this chunk" or "Invert the numbers in this chunk."
+
+Summary Checklist for Your Lab
+Headers: Always include <pthread.h>, <unistd.h>, <stdlib.h>, <stdio.h>.
+
+Compilation: You must compile with -lpthread.
+
+gcc -std=gnu99 -Wall -o program program.c -lpthread
+
+Globals: Do not use them. Instantiate the struct from File 3 in main and pass pointers.
+
+Clean Up: If you malloc it, free it. If you mutex_init it, mutex_destroy it.
