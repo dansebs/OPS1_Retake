@@ -15,9 +15,16 @@
 
 #define MAXLINE 120
 
+typedef struct Node
+{
+    char *data;
+    struct Node* next;
+}Node;
+
 typedef struct{
     long offset;
     long size;
+    Node *head;
 }task;
 
 typedef struct{
@@ -25,11 +32,28 @@ typedef struct{
     int total_tasks;
     int *next_task_idx;
     pthread_mutex_t *task_mutex;
+    char *filename;
 }thread_arg_t;
+
+void add_line(task *t, char *text) {
+    Node *new_node = malloc(sizeof(Node));
+    if (!new_node) ERR("malloc");
+    
+    new_node->data = strdup(text); // duplicate the string safely
+    new_node->next = t->head;      // Insert at head (LIFO - reversed order is ok for now)
+    t->head = new_node;
+}
 
 void* thread_func(void *void_arg)
 {
     thread_arg_t *arg = (thread_arg_t*)void_arg;
+    FILE *fp = fopen(arg->filename,"r");
+    if(!fp) ERR("fopen");
+
+    char *line_buf = NULL;
+    size_t line_len = 0;
+    ssize_t read_len;
+
     while(1)
     { 
         pthread_mutex_lock(arg->task_mutex);
@@ -37,14 +61,33 @@ void* thread_func(void *void_arg)
             pthread_mutex_unlock(arg->task_mutex);
             break;
         }
-        int current_idx = *(arg->next_task_idx);
-       ( *(arg->next_task_idx))++;
-        long a = arg->tsk[current_idx].offset;
-        long b = arg->tsk[current_idx].size;
+        int idx = *(arg->next_task_idx);
+       (*(arg->next_task_idx))++;
+
+        long start = arg->tsk[idx].offset;
+        long size = arg->tsk[idx].size;
 
         pthread_mutex_unlock(arg->task_mutex);
-        printf("Size: %ld Offset: %ld\n",a,b);
+
+        fseek(fp,start,SEEK_SET);
+
+        if(idx > 0){
+            getline(&line_buf,&line_len,fp);
+        }
+
+        long end_boundry = start + size;
+
+        while(ftell(fp) < end_boundry){
+            read_len = getline(&line_buf,&line_len,fp);
+            if(read_len == -1) break;
+
+            add_line(&arg->tsk[idx],line_buf);
+        }
+
     }
+
+    free(line_buf);
+    fclose(fp);
 
     return NULL;
 }
@@ -84,17 +127,23 @@ int main(int argc,char** argv)
     for(int i = 0; i < m; i++){
         tasks[i].offset = header_end + i * chunk_size;
         tasks[i].size = chunk_size;
+        tasks[i].head = NULL;
     }
     tasks[m-1].size += data_size % m;
+
     pthread_mutex_t mx_global = PTHREAD_MUTEX_INITIALIZER;
+
     thread_arg_t args[n];
+
     int next_task_idx = 0;
+
     for (int i = 0; i < n; i++)
     {
         args[i].tsk = tasks;
         args[i].total_tasks = m;
         args[i].next_task_idx = &next_task_idx;
         args[i].task_mutex = &mx_global;
+        args[i].filename = file_name;
     }
 
    
@@ -106,6 +155,16 @@ int main(int argc,char** argv)
     
     for(int i = 0; i < n; i++) {
         if(pthread_join(tids[i], NULL)) ERR("pthread_join");
+    }
+
+    printf("\n--- Printing Read Content ---\n");
+    for (int i = 0; i < m; i++) {
+        printf("Task %d:\n", i);
+        Node *current = tasks[i].head;
+        while (current != NULL) {
+            printf("  %s\n", current->data); // data already contains \n
+            current = current->next;
+        }
     }
     fclose(fptr);
     free(header);
