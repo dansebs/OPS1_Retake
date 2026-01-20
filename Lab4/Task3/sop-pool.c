@@ -76,7 +76,7 @@ void circle_monte_carlo(void *args)
     // DO NOT MODIFY CODE ABOVE - IT CALCULATES CIRCLE AREA
     // TODO STAGE-3: ADD THREADS SYNCHRONIZATION BELOW
 }
-
+//
 void accumulate_monte_carlo(void *args)
 {
     monte_carlo_args_array_t *mc_args = (monte_carlo_args_array_t *)args;
