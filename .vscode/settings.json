@@ -3,5 +3,9 @@
         "stdlib.h": "c",
         "ostream": "c",
         "cstdlib": "c"
+    },
+    "terminal.integrated.env.linux": {
+        "SSH_ASKPASS": "",
+        "GIT_ASKPASS": ""
     }
 }
