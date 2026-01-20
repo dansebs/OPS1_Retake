@@ -1,9 +1,5 @@
 #include "header.h"
 
-/**
- * Thread pool
- */
-
 #define MAX_POOL_SIZE 16
 
 typedef struct thread_pool
