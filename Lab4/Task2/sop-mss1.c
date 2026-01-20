@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #define ERR(source) (perror(source), fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
 #define UNUSED(x) ((void)(x))
@@ -24,6 +25,7 @@ typedef struct thread_arg_t {
     int hand[HAND_SIZE];
     int id;
     pthread_mutex_t *print_mutex;
+    pthread_barrier_t *barrier;
 }thread_arg_t;
 void shuffle(int *array, size_t n)
 {
@@ -78,12 +80,12 @@ void *thread_func(void *void_arg ){
     print_deck(arg->hand,HAND_SIZE);
     printf("\n");
     pthread_mutex_unlock(arg->print_mutex);
+    pthread_barrier_wait(arg->barrier);
     return NULL;
 }
 int main(int argc, char *argv[])
-{
-    UNUSED(argc);
-    UNUSED(argv);
+{   
+    printf("PID: %d\n",getpid());
 
     srand(time(NULL));
 
@@ -103,29 +105,64 @@ int main(int argc, char *argv[])
         usage("n < 4 or n > 7");
     }
 
+    //Signal
+
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask,SIGUSR1);
+
+    if(pthread_sigmask(SIG_BLOCK,&mask,NULL) != 0) ERR("pthread_mask");
+
+    //loop
+    int current_players = 0;
+    pthread_t tids[n];
+    pthread_barrier_t barrier;
+    pthread_barrier_init(&barrier,NULL,n);
     thread_arg_t args[n];
     pthread_mutex_t print_mutex =PTHREAD_MUTEX_INITIALIZER;
 
-    for(int i = 0; i < n; i++){
-        for(int j = 0; j < HAND_SIZE; j++){
-            args[i].hand[j] = deck[j + (i * HAND_SIZE)];
+    while(1){
+        int sig;
+
+        if(sigwait(&mask,&sig) != 0)ERR("sigwait");
+        
+        if(sig == SIGUSR1){
+            if(current_players < n)
+            {
+                for(int j = 0; j < HAND_SIZE; j++){
+                    args[current_players].hand[j] = deck[j + (current_players * HAND_SIZE)];
+                }
+                args[current_players].barrier = &barrier;
+                args[current_players].id = current_players;
+                args[current_players].print_mutex = &print_mutex;
+                
+                int err = pthread_create(&tids[current_players],NULL,thread_func,&args[current_players]);
+                if(err != 0){
+                    errno = err;
+                    ERR("pthread_create");
+                }
+                current_players++;
+
+                if(current_players == n)
+                {
+                    for(int i = 0; i < n; i++)
+                    {
+                        pthread_join(tids[i],NULL);
+                    }
+                    puts("Game over. reseting table");
+
+                    current_players = 0;
+                    shuffle(deck,DECK_SIZE);
+                }
+                
+            }else{
+                printf("Table is full!.\n");
+            }
         }
-        args[i].id = i;
-        args[i].print_mutex = &print_mutex;
-    }
 
-
-    pthread_t tids[n];
-    for(int i = 0; i < n; i++){
-        int err = pthread_create(&tids[i],NULL,thread_func,&args[i]);
-        if(err != 0){
-            errno = err;
-            ERR("pthread_create");
-        }
     }
+    
 
-    for(int i = 0; i < n; i++) {
-        if(pthread_join(tids[i], NULL)) ERR("pthread_join");
-    }
+    pthread_barrier_destroy(&barrier);
     exit(EXIT_SUCCESS);
 }
