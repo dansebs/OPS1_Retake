@@ -64,9 +64,8 @@ int main(int argc,char** argv)
 
     
     long file_size = 0;
-    FILE *fptr;
-    fptr = fopen(file_name, "r");
-    if(fptr == NULL) ERR("fopen");
+    int fd;
+    fd = open(file_name, O_RDONLY|O_CREAT);
 
     nread = getline(&header, &len, fptr);
     //getdelim can go until the specified delimiter, getline is until new line
