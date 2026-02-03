@@ -26,10 +26,11 @@ For any of the snippets below to work, your C files **must** start with the foll
 Required Macros & Globals
 Most snippets assume the existence of these helper constructs:
 code
-C
+```
+```c
 // Error handling macro that terminates the process group on failure
 #define ERR(source) (perror(source), fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), kill(0, SIGKILL), exit(EXIT_FAILURE))
-
+```
 // Atomic flag for signal handling synchronization
 volatile sig_atomic_t last_signal = 0;
 📂 File Manifest & Usage
